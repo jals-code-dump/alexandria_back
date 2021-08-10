@@ -20,7 +20,25 @@ import re
 import nltk
 
 class nlp_tools():
-    """Tools for carrying out NLP tasks."""
+    """
+    Tools for carrying out NLP tasks.
+
+    Functions:
+    ----------
+    text_prepro - Get text from file.
+
+    greyscale - Used internally to convert images to greyscale.
+
+    pdf_phot2text - Used internally to extract text from scanned pdfs.
+
+    readability - Gives a readability score for a piece of text.
+
+    tag - suggests tags for a given text.
+
+    gender_neutral - Checks for gender neutral terminology.
+
+    acronym_check - Find acronyms not currently in acronym database.
+    """
     def __init__(self, poppler_path, tesseract_path):
         """
         Initialisation method for the NLP Tools Class.
@@ -142,13 +160,64 @@ class nlp_tools():
         read_score = "Readability Score: {} \nDifficulty Level: {}".format(reading_ease, dlevel)
         return(read_score)
 
-    def tag(self):
-        # auto tag based on themes
-        pass
+    def tag(self, text):
+        """
+        Suggest tags for the files uploader.
 
-    def gender_neutral(self):
+        DEV - regex pattern is ineffectual
+
+        Inputs:
+        -------
+            text: String
+                Text to get tags from.
+
+        Outputs:
+        --------
+            results: List
+                Top 5 suggestions.
+        """
+        # regex pattern to remove single characters
+        # improves results
+        pattern = r"\s\D\s"
+        # remove said characters
+        text = re.sub(pattern, "", text)
+
+        # create an instance of bigram
+        bigram_measures = nltk.collocations.BigramAssocMeasures()
+
+        # change this to read in your data
+        finder = nltk.BigramCollocationFinder.from_words(text)
+
+        # only bigrams that appear 3+ times
+        finder.apply_freq_filter(3)
+
+        # return the 5 n-grams with the highest PMI
+        results = finder.nbest(bigram_measures.pmi, 5)
+        results = [x for x in results if len(x) > 1]
+        return results
+
+    def gender_neutral(self, text):
+        """
+        Identify terminology that is not gender neutral.
+
+        DEV - Looking for pre-made solution.
+
+        Inputs:
+        -------
+            text: String
+                Text to analyse.
+        
+        Outputs:
+        --------
+            results: List
+                All found non-gender neutral terminology.
+        """
         # checks for gender neutral terminology
-        pass
+        results = []
+        # check if any terminology has been found
+        if len(results) == 0:
+            results = "No gender neutral terminology found."
+        return results
 
     def acronym_check(self, acronyms, text):
         """
@@ -202,5 +271,9 @@ if __name__ == '__main__':
     """
     with open(r"test_files\textract_text.txt", "r") as file:
         text = file.read().replace("\n", " ")
+    """
     acronyms = ["ADD", "AC", "AND"]
     print(nt.acronym_check(acronyms, text))
+    print("tag Test")
+    logging.info(nt.tag(text))
+    """
