@@ -10,13 +10,14 @@ Created on Mon Aug  9 18:56:33 2021
 """
 import textstat
 import pdf2image
-from scipy import signal
 import numpy as np
 import pytesseract
-from matplotlib import pyplot as plt
 import PIL
 import textract
 import os
+import logging
+import re
+import nltk
 
 class nlp_tools():
     """Tools for carrying out NLP tasks."""
@@ -37,13 +38,24 @@ class nlp_tools():
 
     def text_prepro(self, document):
         """
+        Extract text from document to carry out NLP.
+
+        Inputs:
+        -------
+            document: String
+                Path to the document to process
+
+        Outputs:
+        --------
+            results: String
+                Extracted text from document
         """
         try:
             results = textract.process(document)
         except:
             _, extension = os.path.splitext(document) 
-            if extension = ".pdf":
-                results =self.pdf_phot2text(document)
+            if extension == ".pdf":
+                results = self.pdf_phot2text(document)
         #convert files to text required by the class
         return results
 
@@ -55,6 +67,7 @@ class nlp_tools():
         -------
             image: Image File
                 Image to be converted.
+
         Outputs:
         --------
             image: Image File
@@ -137,15 +150,57 @@ class nlp_tools():
         # checks for gender neutral terminology
         pass
 
-    def acronym_check(self):
-        #checks for mad acronyms
-        pass
+    def acronym_check(self, acronyms, text):
+        """
+        Find acronyms not on current database.
+
+        DEV - Check for brackets near expression
+        as these suggest that the acronym is explained
+        If it is explained and not in the database then consider
+        writing back.
+
+        Inputs:
+        -------
+            acronyms: List
+                All acronyms within the database
+            text: String
+                Text to analyse
+        
+        Outputs:
+        --------
+            matches: List
+                List of unknown acronyms in string
+        """
+        # regex to find capitals of length 2-4
+        pattern = r"\b[A-Z]{2,4}\b"
+        # find all matches in source text
+        matches = re.findall(pattern, text)
+        # remove duplicates
+        matches = list(set(matches))
+        # remove matches in acronym database
+        matches = [x for x in matches if x not in acronyms] 
+        if len(matches) == 0:
+            return "No unknown acronyms found"
+        else:
+            return matches
 
 
 # testing function - only runs at module execution
 if __name__ == '__main__':
+    logging.basicConfig(filename='nlp_test_log.log', level=logging.DEBUG)
     nt = nlp_tools(poppler_path=r"C:\poppler\poppler-0.68.0\bin", tesseract_path=r"C:\Program Files\Tesseract-OCR\tesseract.exe")
-    print("Readability Example")
-    print(nt.readability("This is a supercalifrigistic test text example"))
-    print("pdf_phot2text Example")
-    print(nt.pdf_phot2text("test_files\JSP507_Part_1_U.pdf"))
+    """
+    print("pdf_phot2text")
+    text = nt.text_prepro("test_files\JSP507asScannedDoc.pdf")
+    logging.info("pdf_phot2text first 1000 characters: \n" + text[:1000])
+    print("Textract preprocess")
+    text = nt.text_prepro("test_files\JSP507_Part_1_U.pdf")
+    logging.info("Textract preprocess first 1000 characters: \n" + text[:1000])
+    print("Readability Test")
+    text = nt.readability(text)
+    logging.info("Readability Test: \n" + text)
+    """
+    with open(r"test_files\textract_text.txt", "r") as file:
+        text = file.read().replace("\n", " ")
+    acronyms = ["ADD", "AC", "AND"]
+    print(nt.acronym_check(acronyms, text))
