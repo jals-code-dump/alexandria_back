@@ -18,6 +18,7 @@ import os
 import logging
 import re
 import nltk
+import string
 
 class nlp_tools():
     """
@@ -33,7 +34,7 @@ class nlp_tools():
 
     readability - Gives a readability score for a piece of text.
 
-    tag - suggests tags for a given text.
+    tag - Suggests tags for a given text.
 
     gender_neutral - Checks for gender neutral terminology.
 
@@ -160,11 +161,24 @@ class nlp_tools():
         read_score = "Readability Score: {} \nDifficulty Level: {}".format(reading_ease, dlevel)
         return(read_score)
 
+    def clean_tokens(self, text):
+        # split into words
+        tokens = nltk.tokenize.word_tokenize(text)
+        # convert to lower case
+        tokens = [w.lower() for w in tokens]
+        # remove punctuation from each word
+        table = str.maketrans('', '', string.punctuation)
+        stripped = [w.translate(table) for w in tokens]
+        # remove remaining tokens that are not alphabetic
+        words = [word for word in stripped if word.isalpha()]
+        # filter out stop words
+        stop_words = set(nltk.corpus.stopwords.words('english'))
+        words = [w for w in words if not w in stop_words]
+        return words
+
     def tag(self, text):
         """
         Suggest tags for the files uploader.
-
-        DEV - regex pattern is ineffectual
 
         Inputs:
         -------
@@ -176,31 +190,24 @@ class nlp_tools():
             results: List
                 Top 5 suggestions.
         """
-        # regex pattern to remove single characters
-        # improves results
-        pattern = r"\s\D\s"
-        # remove said characters
-        text = re.sub(pattern, "", text)
-
+        words = self.clean_tokens(text)
         # create an instance of bigram
         bigram_measures = nltk.collocations.BigramAssocMeasures()
-
         # change this to read in your data
-        finder = nltk.BigramCollocationFinder.from_words(text)
-
+        finder = nltk.BigramCollocationFinder.from_words(words)
         # only bigrams that appear 3+ times
         finder.apply_freq_filter(3)
-
         # return the 5 n-grams with the highest PMI
         results = finder.nbest(bigram_measures.pmi, 5)
-        results = [x for x in results if len(x) > 1]
         return results
 
     def gender_neutral(self, text):
         """
         Identify terminology that is not gender neutral.
 
-        DEV - Looking for pre-made solution.
+        DEV - Looking for pre-made solution.s
+
+        Current list comprehension not quite working.
 
         Inputs:
         -------
@@ -212,8 +219,11 @@ class nlp_tools():
             results: List
                 All found non-gender neutral terminology.
         """
+        terminology = ['man', 'woman', 'his', 'her', 'he', 'hers']
+        words = self.clean_tokens(text)
         # checks for gender neutral terminology
         results = []
+        results = [w for w in words if(i in w for i in terminology)]
         # check if any terminology has been found
         if len(results) == 0:
             results = "No gender neutral terminology found."
@@ -268,12 +278,12 @@ if __name__ == '__main__':
     print("Readability Test")
     text = nt.readability(text)
     logging.info("Readability Test: \n" + text)
-    """
     with open(r"test_files\textract_text.txt", "r") as file:
         text = file.read().replace("\n", " ")
-    """
     acronyms = ["ADD", "AC", "AND"]
     print(nt.acronym_check(acronyms, text))
     print("tag Test")
     logging.info(nt.tag(text))
     """
+    text = "the policewoman put her hand on the criminals bum bums chairman him her his herself hisself"
+    print(nt.gender_neutral(text))
