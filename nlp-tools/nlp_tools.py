@@ -19,6 +19,8 @@ import logging
 import re
 import nltk
 import string
+import pandas as pd
+
 
 class nlp_tools():
     """
@@ -39,7 +41,10 @@ class nlp_tools():
     gender_neutral - Checks for gender neutral terminology.
 
     acronym_check - Find acronyms not currently in acronym database.
+
+    clean_tokens - Splits text into single words and cleans them.
     """
+
     def __init__(self, poppler_path, tesseract_path):
         """
         Initialisation method for the NLP Tools Class.
@@ -71,11 +76,11 @@ class nlp_tools():
         """
         try:
             results = textract.process(document)
-        except:
-            _, extension = os.path.splitext(document) 
+        except Exception:
+            _, extension = os.path.splitext(document)
             if extension == ".pdf":
                 results = self.pdf_phot2text(document)
-        #convert files to text required by the class
+        # convert files to text required by the class
         return results
 
     def greyscale(self, image):
@@ -94,7 +99,7 @@ class nlp_tools():
         """
         image = np.array(image)
         # multiply each dimension to obtain grayscale
-        image = np.dot(image[...,:3], [0.2989, 0.5870, 0.1140])
+        image = np.dot(image[..., :3], [0.2989, 0.5870, 0.1140])
         # convert back to image
         image = PIL.Image.fromarray(image)
         # convert to greyscale
@@ -109,7 +114,7 @@ class nlp_tools():
         -------
             pdf_path: String
                 The path of the file to convert.
-        
+
         Outputs:
         --------
             results: String
@@ -117,7 +122,7 @@ class nlp_tools():
         """
         # extract images for denoising (optional)
         images = pdf2image.convert_from_path(pdf_path=pdf_path,
-                                     poppler_path=self.poppler_path)
+                                             poppler_path=self.poppler_path)
         # convert all images to greyscale (increases accuracy of OCR)
         images = list(map(self.greyscale, images))
         # OCR images using pytesseract
@@ -142,26 +147,41 @@ class nlp_tools():
         # use the flesch reading ease scorer
         reading_ease = textstat.flesch_reading_ease(text)
         # create a dictionary to add the difficulty explanation
-        scores = {"Very Confusing" : (0.0, 30.0),
-                  "Difficult" : (30.0, 50.0),
-                  "Fairly Difficult" : (50.0, 60.0),
-                  "Standard" : (60.0, 70.0),
-                  "Fairly Easy" : (70.0, 80.0),
-                  "Easy" : (80.0, 90.0),
-                  "Very Easy" : (90.0, 200.0)}
+        scores = {"Very Confusing": (0.0, 30.0),
+                  "Difficult": (30.0, 50.0),
+                  "Fairly Difficult": (50.0, 60.0),
+                  "Standard": (60.0, 70.0),
+                  "Fairly Easy": (70.0, 80.0),
+                  "Easy": (80.0, 90.0),
+                  "Very Easy": (90.0, 200.0)}
         # itereate through dictionary values to get correct description
         for score in scores:
             # check the score is greater or equal to lower limit
             # or less than the upper limit
-            if reading_ease >= scores[score][0] and reading_ease < scores[score][1]:
+            if reading_ease >= scores[score][0] and \
+                        reading_ease < scores[score][1]:
                 # store the result
                 dlevel = score
                 break
         # parse the results string
-        read_score = "Readability Score: {} \nDifficulty Level: {}".format(reading_ease, dlevel)
+        read_score = "Readability Score: {} \nDifficulty Level: {}" \
+            .format(reading_ease, dlevel)
         return(read_score)
 
     def clean_tokens(self, text):
+        """
+        Take a string and return a list of clean words.
+
+        Inputs:
+        -------
+            text: String
+                A single string containing all text to analyse.
+
+        Outputs:
+        --------
+            words: List
+                List of cleaned strings for each word in the text.
+        """
         # split into words
         tokens = nltk.tokenize.word_tokenize(text)
         # convert to lower case
@@ -173,7 +193,7 @@ class nlp_tools():
         words = [word for word in stripped if word.isalpha()]
         # filter out stop words
         stop_words = set(nltk.corpus.stopwords.words('english'))
-        words = [w for w in words if not w in stop_words]
+        words = [w for w in words if w not in stop_words]
         return words
 
     def tag(self, text):
@@ -190,6 +210,7 @@ class nlp_tools():
             results: List
                 Top 5 suggestions.
         """
+        # clean text
         words = self.clean_tokens(text)
         # create an instance of bigram
         bigram_measures = nltk.collocations.BigramAssocMeasures()
@@ -205,28 +226,30 @@ class nlp_tools():
         """
         Identify terminology that is not gender neutral.
 
-        DEV - Looking for pre-made solution.s
-
-        Current list comprehension not quite working.
-
         Inputs:
         -------
             text: String
                 Text to analyse.
-        
+
         Outputs:
         --------
             results: List
                 All found non-gender neutral terminology.
         """
-        terminology = ['man', 'woman', 'his', 'her', 'he', 'hers']
+        # open the terminology csv
+        df = pd.read_csv('terminology.csv', index_col=0)
+        # get the terms
+        terminology = df['term'].tolist()
+        # clean text
         words = self.clean_tokens(text)
+        # remove duplicates
+        words = list(set(words))
         # checks for gender neutral terminology
-        results = []
-        results = [w for w in words if(i in w for i in terminology)]
+        results = [word for word in words if(any(term for term in
+                                                 terminology if term == word))]
         # check if any terminology has been found
         if len(results) == 0:
-            results = "No gender neutral terminology found."
+            results = ["Document contains no non-gender neutral terminology."]
         return results
 
     def acronym_check(self, acronyms, text):
@@ -241,14 +264,14 @@ class nlp_tools():
         Inputs:
         -------
             acronyms: List
-                All acronyms within the database
+                All acronyms within the database.
             text: String
-                Text to analyse
-        
+                Text to analyse.
+
         Outputs:
         --------
             matches: List
-                List of unknown acronyms in string
+                List of unknown acronyms in string.
         """
         # regex to find capitals of length 2-4
         pattern = r"\b[A-Z]{2,4}\b"
@@ -257,7 +280,7 @@ class nlp_tools():
         # remove duplicates
         matches = list(set(matches))
         # remove matches in acronym database
-        matches = [x for x in matches if x not in acronyms] 
+        matches = [x for x in matches if x not in acronyms]
         if len(matches) == 0:
             return "No unknown acronyms found"
         else:
@@ -266,24 +289,24 @@ class nlp_tools():
 
 # testing function - only runs at module execution
 if __name__ == '__main__':
-    logging.basicConfig(filename='nlp_test_log.log', level=logging.DEBUG)
-    nt = nlp_tools(poppler_path=r"C:\poppler\poppler-0.68.0\bin", tesseract_path=r"C:\Program Files\Tesseract-OCR\tesseract.exe")
-    """
+    logging.basicConfig(filename='nlp_test_log.log',
+                        level=logging.DEBUG, filemode="w")
+    nt = nlp_tools(poppler_path=r"C:\poppler\poppler-0.68.0\bin",
+            tesseract_path=r"C:\Program Files\Tesseract-OCR\tesseract.exe")
     print("pdf_phot2text")
-    text = nt.text_prepro("test_files\JSP507asScannedDoc.pdf")
+    text = nt.text_prepro(r"test_files\JSP507asScannedDoc.pdf")
     logging.info("pdf_phot2text first 1000 characters: \n" + text[:1000])
     print("Textract preprocess")
-    text = nt.text_prepro("test_files\JSP507_Part_1_U.pdf")
+    text = nt.text_prepro(r"test_files\JSP507_Part_1_U.pdf")
     logging.info("Textract preprocess first 1000 characters: \n" + text[:1000])
     print("Readability Test")
-    text = nt.readability(text)
-    logging.info("Readability Test: \n" + text)
-    with open(r"test_files\textract_text.txt", "r") as file:
-        text = file.read().replace("\n", " ")
+    test = nt.readability(text)
+    logging.info("Readability Test: \n" + test)
     acronyms = ["ADD", "AC", "AND"]
-    print(nt.acronym_check(acronyms, text))
-    print("tag Test")
-    logging.info(nt.tag(text))
-    """
-    text = "the policewoman put her hand on the criminals bum bums chairman him her his herself hisself"
-    print(nt.gender_neutral(text))
+    print("Acronym Check")
+    logging.info("New Acronyms Found: \n" + str(nt.acronym_check(acronyms, text)))
+    print("Tag Test")
+    logging.info("Bigram tag suggestions: \n" + str(nt.tag(text)))
+    print("Neutral Terminology Text")
+    text = "he was a chairman and she was a woman that was a policewoman"
+    logging.info("Non-Gender Neutral Terminology Check: \n" + str(nt.gender_neutral(text)))
